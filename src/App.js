@@ -151,7 +151,7 @@ function App() {
     }
 
     try {
-      const response = await fetch(`https://fastingapp-db-production.up.railway.app/api${endpoint}`, config);
+      const response = await fetch(`https://fastinapp-backend-production.up.railway.app/api${endpoint}`, config);
       const data = await response.json();
 
       if (!response.ok) {
