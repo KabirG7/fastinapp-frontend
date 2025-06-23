@@ -142,7 +142,7 @@ function App() {
   const apiCall = useCallback(async (endpoint, options = {}) => {
     const config = {
       headers: { 'Content-Type': 'application/json' },
-      ...options
+      ...options    
     };
 
     const currentToken = token || localStorage.getItem('token');
