@@ -31,6 +31,7 @@ function App() {
 
   // History view state
   const [selectedDay, setSelectedDay] = useState(null);
+  const [historyLoading, setHistoryLoading] = useState(false);
 
   // Auth form states
   const [authForm, setAuthForm] = useState({
@@ -152,6 +153,16 @@ function App() {
 
     try {
       const response = await fetch(`https://fastinapp-backend-production.up.railway.app/api${endpoint}`, config);
+      
+      // Check if response is JSON
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        // If not JSON, get text to see what was returned
+        const text = await response.text();
+        console.error('Non-JSON response:', text);
+        throw new Error(`Server returned HTML instead of JSON. Endpoint might not exist: ${endpoint}`);
+      }
+
       const data = await response.json();
 
       if (!response.ok) {
@@ -185,12 +196,16 @@ function App() {
 
   const fetchFastingHistory = useCallback(async () => {
     try {
+      setHistoryLoading(true);
       console.log('Fetching fasting history...');
       const history = await apiCall('/fasting/history');
       console.log('History response:', history);
-      setFastingHistory(history);
+      setFastingHistory(Array.isArray(history) ? history : []);
     } catch (error) {
       console.error('Error fetching history:', error);
+      setFastingHistory([]);
+    } finally {
+      setHistoryLoading(false);
     }
   }, [apiCall]);
 
@@ -246,6 +261,13 @@ function App() {
     }
     return () => clearInterval(interval);
   }, [activeFast]);
+
+  // Fetch history when switching to history view
+  useEffect(() => {
+    if (currentView === 'history' && token) {
+      fetchFastingHistory();
+    }
+  }, [currentView, token, fetchFastingHistory]);
 
   const handleLogout = () => {
     console.log('Logging out...');
@@ -337,7 +359,16 @@ function App() {
     setIsLoading(true);
     try {
       console.log('Cancelling fast...');
-      await apiCall('/fasting/cancel', { method: 'PUT' });
+      // Try different HTTP methods and endpoints
+      let response;
+      try {
+        response = await apiCall('/fasting/cancel', { method: 'PUT' });
+      } catch (error) {
+        console.log('PUT failed, trying POST...');
+        response = await apiCall('/fasting/cancel', { method: 'POST' });
+      }
+      
+      console.log('Cancel response:', response);
       setActiveFast(null);
       setElapsedTime(0);
       setCurrentView('dashboard');
@@ -375,7 +406,8 @@ function App() {
     user: user?.username || 'none',
     currentView,
     activeFast: activeFast ? 'present' : 'none',
-    fastingStats: fastingStats ? 'present' : 'none'
+    fastingStats: fastingStats ? 'present' : 'none',
+    historyCount: fastingHistory.length
   });
 
   // Auth Screen
@@ -624,10 +656,6 @@ function App() {
 
   // History Screen - New Weekly Square Design
   if (currentView === 'history') {
-    if (fastingHistory.length === 0) {
-      fetchFastingHistory();
-    }
-
     const weeklyData = getWeeklyHistory();
 
     return (
@@ -649,7 +677,11 @@ function App() {
             </div>
             
             <div className={`history-container ${selectedDay ? 'details-open' : ''}`}>
-              {fastingHistory.length === 0 ? (
+              {historyLoading ? (
+                <div className="loading-state">
+                  <p>Loading fasting history...</p>
+                </div>
+              ) : fastingHistory.length === 0 ? (
                 <div className="empty-state">
                   <p>No fasting sessions yet. Start your first fast!</p>
                 </div>
